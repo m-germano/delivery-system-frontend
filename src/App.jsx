@@ -1,14 +1,12 @@
-import { BrowserRouter } from 'react-router-dom';
-import { AppRoutes } from './routes/AppRoutes.jsx';
-import { Navbar } from './components/Navbar.jsx';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import AppRoutes from './routes/AppRoutes.jsx';
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Navbar />
-      <main className="container">
-        <AppRoutes />
-      </main>
-    </BrowserRouter>
+    <>
+      <AppRoutes />
+      <ToastContainer position="top-right" autoClose={3000} closeOnClick pauseOnHover theme="colored" />
+    </>
   );
 }

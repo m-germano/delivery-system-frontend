@@ -1,17 +1,31 @@
-import { useEffect, useState } from 'react';
-import { apiFetch } from '../services/api.js';
+import { useCallback, useEffect, useState } from 'react';
+import { getApiErrorMessage } from '../services/api.js';
+import { productService } from '../services/productService.js';
 
-export function useProducts() {
+export function useProducts(params = {}, options = { enabled: false }) {
   const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(options.enabled));
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    apiFetch('/api/products')
-      .then(setProducts)
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+  const fetchProducts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-  return { products, loading, error };
+    try {
+      const data = await productService.list(params);
+      setProducts(Array.isArray(data) ? data : data?.items ?? []);
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, 'Não foi possível carregar os produtos.'));
+    } finally {
+      setLoading(false);
+    }
+  }, [JSON.stringify(params)]);
+
+  useEffect(() => {
+    if (options.enabled) {
+      fetchProducts();
+    }
+  }, [fetchProducts, options.enabled]);
+
+  return { products, loading, error, refetch: fetchProducts };
 }

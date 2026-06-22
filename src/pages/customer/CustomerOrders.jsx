@@ -1,0 +1,190 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import { ClipboardList, KeyRound, MapPinned, RefreshCw, X } from 'lucide-react';
+import Alert from '../../components/ui/Alert.jsx';
+import Badge from '../../components/ui/Badge.jsx';
+import Button from '../../components/ui/Button.jsx';
+import EmptyState from '../../components/ui/EmptyState.jsx';
+import PageHeader from '../../components/ui/PageHeader.jsx';
+import { getApiErrorMessage } from '../../services/api.js';
+import { orderService } from '../../services/orderService.js';
+import { formatCurrency } from '../../utils/formatters.js';
+
+const statusVariant = {
+  ABERTO: 'orange',
+  ACEITO: 'blue',
+  EM_PREPARO: 'blue',
+  AGUARDANDO_ENTREGADOR: 'orange',
+  EM_ENTREGA: 'blue',
+  ENTREGUE: 'green',
+  CANCELADO: 'red',
+  RECUSADO: 'red',
+};
+
+function OrderCard({ order, onCancel }) {
+  const canCustomerCancel = order.status === 'ABERTO';
+  const canTrack = order.status === 'EM_ENTREGA';
+  const deliveryConfirmationCode = order.delivery_confirmation_code;
+
+  return (
+    <article className="app-card space-y-5 p-4 md:p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-lg font-semibold text-ink-900 md:text-xl">Pedido #{order.id}</h3>
+            <Badge variant={statusVariant[order.status] ?? 'slate'}>{order.status}</Badge>
+          </div>
+          <p className="mt-1 text-sm text-ink-500">
+            {order.company?.name ?? 'Empresa'} · pagamento na entrega: {order.payment_method}
+          </p>
+        </div>
+        <p className="text-xl font-semibold text-coral-700 md:text-2xl">{formatCurrency(order.total)}</p>
+      </div>
+
+      <div className="rounded-2xl border border-ink-200 bg-ink-50 p-4">
+        <p className="text-sm font-semibold text-ink-900">Itens</p>
+        <div className="mt-3 space-y-2">
+          {order.items.map((item) => (
+            <div key={item.id} className="flex justify-between gap-3 text-sm text-ink-600">
+              <span>
+                {item.quantity}x {item.product_name}
+              </span>
+              <strong className="text-ink-800">{formatCurrency(item.total_price)}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-3 text-sm text-ink-600 md:grid-cols-3">
+        <div className="rounded-2xl border border-ink-200 p-3">
+          <span className="block text-xs font-medium uppercase text-ink-400">Subtotal</span>
+          <strong className="mt-1 block text-ink-800">{formatCurrency(order.subtotal)}</strong>
+        </div>
+        <div className="rounded-2xl border border-ink-200 p-3">
+          <span className="block text-xs font-medium uppercase text-ink-400">Entrega</span>
+          <strong className="mt-1 block text-ink-800">{formatCurrency(order.delivery_fee)}</strong>
+        </div>
+        <div className="rounded-2xl border border-ink-200 p-3">
+          <span className="block text-xs font-medium uppercase text-ink-400">Distância</span>
+          <strong className="mt-1 block text-ink-800">{order.distance_km} km</strong>
+        </div>
+      </div>
+
+      {canTrack && deliveryConfirmationCode ? (
+        <div className="rounded-2xl border border-coral-200 bg-coral-50 p-4">
+          <div className="flex items-start gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-coral-700">
+              <KeyRound className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink-900">Código de confirmação da entrega</p>
+              <p className="mt-1 text-sm leading-6 text-ink-600">
+                Informe este código ao entregador apenas quando o pedido chegar.
+              </p>
+              <p className="mt-3 inline-flex rounded-xl border border-coral-200 bg-white px-4 py-2 text-2xl font-semibold tracking-[0.35em] text-coral-700">
+                {deliveryConfirmationCode}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {canTrack && !deliveryConfirmationCode ? (
+        <Alert variant="info" title="Pedido saiu para entrega">
+          O pedido está em rota. O código de confirmação será exibido assim que estiver disponível.
+        </Alert>
+      ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        {canTrack ? (
+          <Link to={`/customer/orders/${order.id}/tracking`} className="app-button-secondary">
+            <MapPinned className="h-4 w-4" />
+            Acompanhar entrega
+          </Link>
+        ) : null}
+        {canCustomerCancel ? (
+          <Button type="button" variant="danger" onClick={() => onCancel(order)}>
+            <X className="h-4 w-4" />
+            Cancelar pedido
+          </Button>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+export default function CustomerOrders() {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  async function loadOrders() {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await orderService.listMine({ limit: 100 });
+      setOrders(response?.items ?? []);
+    } catch (requestError) {
+      const message = getApiErrorMessage(requestError, 'Não foi possível carregar seus pedidos.');
+      setError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  async function handleCancel(order) {
+    try {
+      await orderService.cancelByCustomer(order.id);
+      toast.success('Pedido cancelado com sucesso.');
+      await loadOrders();
+    } catch (requestError) {
+      toast.error(getApiErrorMessage(requestError, 'Não foi possível cancelar o pedido.'));
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Cliente"
+        title="Meus pedidos"
+        description="Acompanhe seus pedidos. Quando o pedido sair para entrega, você verá o mapa e o código de confirmação."
+        actions={
+          <Button type="button" variant="secondary" onClick={loadOrders} disabled={loading}>
+            <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+            Atualizar
+          </Button>
+        }
+      />
+
+      {error ? (
+        <Alert variant="error" title="Atenção">
+          {error}
+        </Alert>
+      ) : null}
+
+      {loading ? (
+        <div className="app-card flex items-center gap-3 p-6 text-sm text-ink-500">
+          <RefreshCw className="h-4 w-4 animate-spin" />
+          Carregando pedidos...
+        </div>
+      ) : null}
+
+      {!loading && orders.length === 0 ? (
+        <EmptyState icon={ClipboardList} title="Nenhum pedido criado" description="Entre em um restaurante pela tela Explorar para montar seu carrinho." />
+      ) : null}
+
+      <div className="space-y-4">
+        {orders.map((order) => (
+          <OrderCard key={order.id} order={order} onCancel={handleCancel} />
+        ))}
+      </div>
+    </div>
+  );
+}
