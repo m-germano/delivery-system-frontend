@@ -16,18 +16,22 @@ const statusVariant = {
   ABERTO: 'orange',
   ACEITO: 'blue',
   EM_PREPARO: 'blue',
+  PRONTO_PARA_RETIRADA: 'orange',
   AGUARDANDO_ENTREGADOR: 'orange',
   EM_ENTREGA: 'blue',
   ENTREGUE: 'green',
+  RETIRADO: 'green',
   CANCELADO: 'red',
   RECUSADO: 'red',
 };
 
 function OrderCard({ order, onCancel }) {
+  const isPickup = order.fulfillment_type === 'PICKUP';
   const canCustomerCancel = order.status === 'ABERTO';
   const canPayPix = order.status === 'AGUARDANDO_PAGAMENTO' && order.payment_method === 'PIX_ONLINE';
-  const canTrack = order.status === 'EM_ENTREGA';
+  const canTrack = !isPickup && order.status === 'EM_ENTREGA';
   const deliveryConfirmationCode = order.delivery_confirmation_code;
+  const pickupConfirmationCode = order.pickup_confirmation_code;
 
   return (
     <article className="app-card space-y-5 p-4 md:p-5">
@@ -36,9 +40,10 @@ function OrderCard({ order, onCancel }) {
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-lg font-semibold text-ink-900 md:text-xl">Pedido #{order.id}</h3>
             <Badge variant={statusVariant[order.status] ?? 'slate'}>{order.status}</Badge>
+            <Badge variant={isPickup ? 'blue' : 'green'}>{isPickup ? 'Retirada' : 'Delivery'}</Badge>
           </div>
           <p className="mt-1 text-sm text-ink-500">
-            {order.company?.name ?? 'Empresa'} · {order.payment_method === 'PIX_ONLINE' ? 'Pix online' : `pagamento na entrega: ${order.payment_method}`}
+            {order.company?.name ?? 'Empresa'} · {order.payment_method === 'PIX_ONLINE' ? 'Pix online' : `pagamento ${isPickup ? 'na retirada' : 'na entrega'}: ${order.payment_method}`}
           </p>
         </div>
         <p className="text-xl font-semibold text-coral-700 md:text-2xl">{formatCurrency(order.total)}</p>
@@ -64,12 +69,14 @@ function OrderCard({ order, onCancel }) {
           <strong className="mt-1 block text-ink-800">{formatCurrency(order.subtotal)}</strong>
         </div>
         <div className="rounded-2xl border border-ink-200 p-3">
-          <span className="block text-xs font-medium uppercase text-ink-400">Entrega</span>
-          <strong className="mt-1 block text-ink-800">{formatCurrency(order.delivery_fee)}</strong>
+          <span className="block text-xs font-medium uppercase text-ink-400">{isPickup ? 'Desconto retirada' : 'Entrega'}</span>
+          <strong className="mt-1 block text-ink-800">
+            {isPickup ? `-${formatCurrency(order.discount_amount ?? 0)}` : formatCurrency(order.delivery_fee)}
+          </strong>
         </div>
         <div className="rounded-2xl border border-ink-200 p-3">
-          <span className="block text-xs font-medium uppercase text-ink-400">Distância</span>
-          <strong className="mt-1 block text-ink-800">{order.distance_km} km</strong>
+          <span className="block text-xs font-medium uppercase text-ink-400">{isPickup ? 'Modalidade' : 'Distância'}</span>
+          <strong className="mt-1 block text-ink-800">{isPickup ? 'Retirada na loja' : `${order.distance_km} km`}</strong>
         </div>
       </div>
 
@@ -95,6 +102,37 @@ function OrderCard({ order, onCancel }) {
       {canTrack && !deliveryConfirmationCode ? (
         <Alert variant="info" title="Pedido saiu para entrega">
           O pedido está em rota. O código de confirmação será exibido assim que estiver disponível.
+        </Alert>
+      ) : null}
+
+      {isPickup && order.status === 'PRONTO_PARA_RETIRADA' && pickupConfirmationCode ? (
+        <div className="rounded-2xl border border-coral-200 bg-coral-50 p-4">
+          <div className="flex items-start gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-coral-700">
+              <KeyRound className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-ink-900">Código de confirmação da retirada</p>
+              <p className="mt-1 text-sm leading-6 text-ink-600">
+                Informe este código à loja somente quando for retirar o pedido.
+              </p>
+              <p className="mt-3 inline-flex rounded-xl border border-coral-200 bg-white px-4 py-2 text-2xl font-semibold tracking-[0.35em] text-coral-700">
+                {pickupConfirmationCode}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isPickup && order.status === 'PRONTO_PARA_RETIRADA' && !pickupConfirmationCode ? (
+        <Alert variant="info" title="Pedido pronto para retirada">
+          Seu pedido está pronto. Atualize a tela se o código de retirada ainda não apareceu.
+        </Alert>
+      ) : null}
+
+      {order.status === 'RECUSADO' && order.payment_method === 'PIX_ONLINE' ? (
+        <Alert variant="success" title="Pedido recusado">
+          Pedido recusado. Pagamento reembolsado.
         </Alert>
       ) : null}
 

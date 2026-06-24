@@ -202,14 +202,9 @@ export default function CustomerPixCheckout() {
   }, [isPending, payment?.expires_at]);
 
   useEffect(() => {
-    if (!isApproved) return undefined;
-
-    const timeoutId = window.setTimeout(() => {
-      navigate(`/customer/orders/${activeOrderId}/tracking`, { replace: true });
-    }, 1800);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [activeOrderId, isApproved, navigate]);
+    if (!isApproved) return;
+    setError(null);
+  }, [isApproved]);
 
   async function handleCopyPixCode() {
     if (!payment?.qr_code) return;
@@ -266,7 +261,7 @@ export default function CustomerPixCheckout() {
     try {
       await orderService.switchToPayOnDelivery(activeOrderId);
       toast.success('Pedido alterado para pagamento na entrega.');
-      navigate(`/customer/orders/${activeOrderId}/tracking`);
+      navigate('/customer/orders');
     } catch (requestError) {
       toast.error(getApiErrorMessage(requestError, 'Não foi possível mudar para pagamento na entrega.'));
     } finally {
@@ -295,9 +290,25 @@ export default function CustomerPixCheckout() {
       ) : null}
 
       {isApproved ? (
-        <Alert variant="success" title="Pagamento aprovado">
-          Pronto! Vamos abrir a tela de acompanhamento do pedido em instantes.
-        </Alert>
+        <section className="app-card space-y-6 p-6 text-center md:p-8">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-emerald-50 text-emerald-600">
+            <CheckCircle2 className="h-9 w-9" />
+          </div>
+          <div>
+            <h2 className="text-3xl font-black text-ink-950">Pagamento recebido!</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-base leading-7 text-ink-600">
+              Seu pagamento foi confirmado e o pedido já foi enviado para a loja.
+            </p>
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-ink-500">
+              Aguarde a loja aceitar e preparar o pedido. Caso a loja recuse, o valor pago será reembolsado.
+            </p>
+          </div>
+          <div className="flex justify-center">
+            <Link to="/customer/orders" className="app-button-primary">
+              Ir para meus pedidos
+            </Link>
+          </div>
+        </section>
       ) : null}
 
       {canRetry && !isApproved ? (
@@ -306,6 +317,7 @@ export default function CustomerPixCheckout() {
         </Alert>
       ) : null}
 
+      {!isApproved ? (
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="app-card space-y-5 p-5 md:p-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -402,6 +414,7 @@ export default function CustomerPixCheckout() {
           </div>
         </aside>
       </section>
+      ) : null}
     </div>
   );
 }

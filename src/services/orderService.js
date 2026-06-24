@@ -90,8 +90,12 @@ export const orderService = {
     return data;
   },
 
-  async updateStatus(id, status) {
-    const { data } = await api.patch(`/orders/${id}/status`, { status });
+  async updateStatus(id, status, confirmationCode = null) {
+    const payload = { status };
+    if (confirmationCode) {
+      payload.confirmation_code = confirmationCode;
+    }
+    const { data } = await api.patch(`/orders/${id}/status`, payload);
     return data;
   },
 };
