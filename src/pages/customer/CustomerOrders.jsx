@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { ClipboardList, KeyRound, MapPinned, QrCode, RefreshCw, X } from 'lucide-react';
+import { ClipboardList, KeyRound, MapPinned, QrCode, RefreshCw, Star, X } from 'lucide-react';
 import Alert from '../../components/ui/Alert.jsx';
 import Badge from '../../components/ui/Badge.jsx';
 import Button from '../../components/ui/Button.jsx';
 import EmptyState from '../../components/ui/EmptyState.jsx';
+import Modal from '../../components/ui/Modal.jsx';
 import PageHeader from '../../components/ui/PageHeader.jsx';
+import StarRating from '../../components/ui/StarRating.jsx';
 import { getApiErrorMessage } from '../../services/api.js';
 import { orderService } from '../../services/orderService.js';
+import { reviewService } from '../../services/reviewService.js';
 import { formatCurrency } from '../../utils/formatters.js';
 
 const statusVariant = {
@@ -25,7 +28,7 @@ const statusVariant = {
   RECUSADO: 'red',
 };
 
-function OrderCard({ order, onCancel }) {
+function OrderCard({ order, onCancel, onReview }) {
   const isPickup = order.fulfillment_type === 'PICKUP';
   const canCustomerCancel = order.status === 'ABERTO';
   const canPayPix = order.status === 'AGUARDANDO_PAGAMENTO' && order.payment_method === 'PIX_ONLINE';
@@ -136,6 +139,16 @@ function OrderCard({ order, onCancel }) {
         </Alert>
       ) : null}
 
+      {order.has_review ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <StarRating rating={order.review?.rating ?? 0} readOnly />
+            <p className="text-sm font-semibold text-ink-800">Avaliação enviada</p>
+          </div>
+          {order.review?.comment ? <p className="mt-2 text-sm text-ink-600">{order.review.comment}</p> : null}
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
         {canPayPix ? (
           <Link to={`/checkout/pix/${order.id}`} className="app-button-primary">
@@ -155,6 +168,12 @@ function OrderCard({ order, onCancel }) {
             Cancelar pedido
           </Button>
         ) : null}
+        {order.can_review ? (
+          <Button type="button" variant="secondary" onClick={() => onReview(order)}>
+            <Star className="h-4 w-4" />
+            Avaliar restaurante
+          </Button>
+        ) : null}
       </div>
     </article>
   );
@@ -164,6 +183,13 @@ export default function CustomerOrders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [reviewModal, setReviewModal] = useState({
+    open: false,
+    order: null,
+    rating: 0,
+    comment: '',
+    submitting: false,
+  });
 
   async function loadOrders() {
     setLoading(true);
@@ -192,6 +218,51 @@ export default function CustomerOrders() {
       await loadOrders();
     } catch (requestError) {
       toast.error(getApiErrorMessage(requestError, 'Não foi possível cancelar o pedido.'));
+    }
+  }
+
+  function openReviewModal(order) {
+    setReviewModal({
+      open: true,
+      order,
+      rating: 0,
+      comment: '',
+      submitting: false,
+    });
+  }
+
+  function closeReviewModal() {
+    if (reviewModal.submitting) return;
+    setReviewModal((current) => ({ ...current, open: false }));
+  }
+
+  async function submitReview() {
+    if (!reviewModal.order) return;
+
+    if (reviewModal.rating < 1 || reviewModal.rating > 5) {
+      toast.error('Escolha uma nota de 1 a 5 estrelas.');
+      return;
+    }
+
+    setReviewModal((current) => ({ ...current, submitting: true }));
+
+    try {
+      await reviewService.createOrderReview(reviewModal.order.id, {
+        rating: reviewModal.rating,
+        comment: reviewModal.comment.trim() || null,
+      });
+      toast.success('Avaliação enviada.');
+      setReviewModal({
+        open: false,
+        order: null,
+        rating: 0,
+        comment: '',
+        submitting: false,
+      });
+      await loadOrders();
+    } catch (requestError) {
+      toast.error(getApiErrorMessage(requestError, 'Não foi possível enviar a avaliação.'));
+      setReviewModal((current) => ({ ...current, submitting: false }));
     }
   }
 
@@ -228,9 +299,51 @@ export default function CustomerOrders() {
 
       <div className="space-y-4">
         {orders.map((order) => (
-          <OrderCard key={order.id} order={order} onCancel={handleCancel} />
+          <OrderCard key={order.id} order={order} onCancel={handleCancel} onReview={openReviewModal} />
         ))}
       </div>
+
+      <Modal
+        open={reviewModal.open}
+        title="Avaliar restaurante"
+        description={reviewModal.order ? `Pedido #${reviewModal.order.id} · ${reviewModal.order.company?.name ?? 'Restaurante'}` : ''}
+        onClose={closeReviewModal}
+        footer={
+          <>
+            <Button type="button" variant="ghost" onClick={closeReviewModal} disabled={reviewModal.submitting}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={submitReview} disabled={reviewModal.submitting || reviewModal.rating < 1}>
+              {reviewModal.submitting ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Star className="h-4 w-4" />}
+              Enviar avaliação
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-5">
+          <div>
+            <p className="mb-2 text-sm font-semibold text-ink-800">Sua nota</p>
+            <StarRating
+              rating={reviewModal.rating}
+              size="lg"
+              onChange={(rating) => setReviewModal((current) => ({ ...current, rating }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="app-label" htmlFor="review-comment">Comentário opcional</label>
+            <textarea
+              id="review-comment"
+              className="app-input min-h-28 resize-y"
+              maxLength={1000}
+              placeholder="Conte como foi sua experiência com o restaurante..."
+              value={reviewModal.comment}
+              onChange={(event) => setReviewModal((current) => ({ ...current, comment: event.target.value }))}
+              disabled={reviewModal.submitting}
+            />
+            <p className="text-xs text-ink-400">{reviewModal.comment.length}/1000</p>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

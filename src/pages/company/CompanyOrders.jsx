@@ -45,10 +45,18 @@ const statusVariant = {
   RECUSADO: 'red',
 };
 
+const companyCancelableStatuses = new Set([
+  'ACEITO',
+  'EM_PREPARO',
+  'PRONTO_PARA_RETIRADA',
+  'AGUARDANDO_ENTREGADOR',
+  'EM_ENTREGA',
+]);
+
 function OrderCard({ order, onAction }) {
   const isPickup = order.fulfillment_type === 'PICKUP';
   const actions = (isPickup ? pickupStatusActions : deliveryStatusActions)[order.status] ?? [];
-  const canCompanyCancel = !['ENTREGUE', 'RETIRADO', 'CANCELADO', 'RECUSADO'].includes(order.status);
+  const canCompanyCancel = companyCancelableStatuses.has(order.status);
 
   return (
     <article className="app-card space-y-5 p-5">
@@ -216,6 +224,8 @@ export default function CompanyOrders() {
 
       if (action.action === 'reject' && order.payment_method === 'PIX_ONLINE') {
         toast.success('Pedido recusado e reembolso solicitado/realizado.');
+      } else if (action.action === 'cancel' && order.payment_method === 'PIX_ONLINE') {
+        toast.success('Pedido cancelado e reembolso solicitado/realizado.');
       } else {
         toast.success('Pedido atualizado com sucesso.');
       }

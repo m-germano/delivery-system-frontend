@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   MapPin,
   ShoppingBag,
+  Star,
   Store,
   UserCog,
   Users,
@@ -68,6 +69,12 @@ export const NAVIGATION_ITEMS = [
     label: 'Pedidos recebidos',
     path: '/company/orders',
     icon: ClipboardList,
+    roles: ['COMPANY'],
+  },
+  {
+    label: 'Avaliações',
+    path: '/company/reviews',
+    icon: Star,
     roles: ['COMPANY'],
   },
   {

@@ -1,20 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { ArrowLeft, MapPin, Minus, Plus, RefreshCw, ShoppingCart, Store, Trash2 } from 'lucide-react';
+import { ArrowLeft, MessageSquare, MapPin, Minus, Plus, RefreshCw, ShoppingCart, Store, Trash2 } from 'lucide-react';
 import Alert from '../../components/ui/Alert.jsx';
 import Badge from '../../components/ui/Badge.jsx';
 import Button from '../../components/ui/Button.jsx';
 import EmptyState from '../../components/ui/EmptyState.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import PageHeader from '../../components/ui/PageHeader.jsx';
+import StarRating from '../../components/ui/StarRating.jsx';
 import { getApiErrorMessage } from '../../services/api.js';
 import { companyService } from '../../services/companyService.js';
 import { customerAddressService } from '../../services/customerAddressService.js';
 import { orderService } from '../../services/orderService.js';
 import { productService } from '../../services/productService.js';
+import { reviewService } from '../../services/reviewService.js';
 import { useCartStore } from '../../stores/useCartStore.js';
-import { formatCurrency } from '../../utils/formatters.js';
+import { formatCurrency, formatDateTime } from '../../utils/formatters.js';
 
 const paymentMethods = [
   { value: 'CREDITO', label: 'Crédito na entrega' },
@@ -64,6 +66,21 @@ function ProductCard({ product, company, onAdd }) {
   );
 }
 
+function ReviewCard({ review }) {
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="font-bold text-slate-900">{review.customer?.name ?? 'Cliente'}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-400">Pedido #{review.order_id} · {formatDateTime(review.created_at)}</p>
+        </div>
+        <StarRating rating={review.rating} readOnly />
+      </div>
+      {review.comment ? <p className="mt-3 text-sm leading-6 text-slate-600">{review.comment}</p> : null}
+    </article>
+  );
+}
+
 export default function CustomerRestaurant() {
   const { companyId } = useParams();
   const navigate = useNavigate();
@@ -80,6 +97,16 @@ export default function CustomerRestaurant() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [submittingOrder, setSubmittingOrder] = useState(false);
   const [error, setError] = useState(null);
+  const [reviews, setReviews] = useState({
+    items: [],
+    total: 0,
+    page: 1,
+    limit: 5,
+    total_pages: 0,
+    average_rating: null,
+    reviews_count: 0,
+  });
+  const [reviewsLoading, setReviewsLoading] = useState(false);
 
   const cartCompany = useCartStore((state) => state.company);
   const cartItems = useCartStore((state) => state.items);
@@ -148,12 +175,29 @@ export default function CustomerRestaurant() {
 
       const productsResponse = await productService.list({ company_id: companyId, limit: 100 });
       setProducts(productsResponse?.items ?? []);
+      await loadReviews(1, { append: false, silent: true });
     } catch (requestError) {
       const message = getApiErrorMessage(requestError, 'Não foi possível carregar a empresa.');
       setError(message);
       toast.error(message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadReviews(page = 1, { append = false, silent = false } = {}) {
+    if (!silent) setReviewsLoading(true);
+
+    try {
+      const response = await reviewService.listCompanyReviews(companyId, { page, limit: 5 });
+      setReviews((current) => ({
+        ...response,
+        items: append ? [...current.items, ...(response?.items ?? [])] : response?.items ?? [],
+      }));
+    } catch (requestError) {
+      if (!silent) toast.error(getApiErrorMessage(requestError, 'Não foi possível carregar avaliações.'));
+    } finally {
+      if (!silent) setReviewsLoading(false);
     }
   }
 
@@ -311,16 +355,34 @@ export default function CustomerRestaurant() {
       {error ? <Alert variant="error" title="Atenção">{error}</Alert> : null}
 
       {company ? (
-        <PageHeader
-          title={company.name}
-          description={company.description || 'Escolha os produtos e finalize o pedido para delivery ou retirada.'}
-          actions={
-            <Button type="button" variant="secondary" onClick={loadPage} disabled={loading}>
-              <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-              Atualizar
-            </Button>
-          }
-        />
+        <>
+          <PageHeader
+            title={company.name}
+            description={company.description || 'Escolha os produtos e finalize o pedido para delivery ou retirada.'}
+            actions={
+              <Button type="button" variant="secondary" onClick={loadPage} disabled={loading}>
+                <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+                Atualizar
+              </Button>
+            }
+          />
+          <div className="app-card flex flex-wrap items-center justify-between gap-3 p-4">
+            <div className="flex items-center gap-3">
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-50 text-amber-600">
+                <MessageSquare className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-900">Avaliações do restaurante</p>
+                <p className="text-sm text-slate-500">
+                  {Number(company.reviews_count ?? reviews.reviews_count ?? 0) > 0
+                    ? `${company.reviews_count ?? reviews.reviews_count} avaliação(ões) recebidas`
+                    : 'Este restaurante ainda não recebeu avaliações.'}
+                </p>
+              </div>
+            </div>
+            <StarRating rating={company.average_rating ?? reviews.average_rating ?? 0} readOnly showValue count={company.reviews_count ?? reviews.reviews_count ?? 0} />
+          </div>
+        </>
       ) : null}
 
       {!loading && acceptsDelivery && !locationStatus?.has_active_location ? (
@@ -415,6 +477,38 @@ export default function CustomerRestaurant() {
           </Button>
         </aside>
       </div>
+
+      <section className="app-card space-y-4 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-orange-500">Avaliações</p>
+            <h2 className="mt-1 text-xl font-black text-slate-950">O que os clientes dizem</h2>
+          </div>
+          <StarRating rating={reviews.average_rating ?? company?.average_rating ?? 0} readOnly showValue count={reviews.reviews_count ?? company?.reviews_count ?? 0} />
+        </div>
+
+        {reviews.items.length === 0 ? (
+          <EmptyState icon={MessageSquare} title="Sem avaliações ainda" description="As avaliações aparecem aqui depois que clientes concluem pedidos." />
+        ) : (
+          <div className="space-y-3">
+            {reviews.items.map((review) => (
+              <ReviewCard key={review.id} review={review} />
+            ))}
+          </div>
+        )}
+
+        {reviews.page < reviews.total_pages ? (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => loadReviews(reviews.page + 1, { append: true })}
+            disabled={reviewsLoading}
+          >
+            <RefreshCw className={reviewsLoading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+            Carregar mais avaliações
+          </Button>
+        ) : null}
+      </section>
 
       <Modal
         open={checkoutOpen}
