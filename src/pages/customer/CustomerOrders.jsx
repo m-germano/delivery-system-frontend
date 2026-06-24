@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { ClipboardList, KeyRound, MapPinned, RefreshCw, X } from 'lucide-react';
+import { ClipboardList, KeyRound, MapPinned, QrCode, RefreshCw, X } from 'lucide-react';
 import Alert from '../../components/ui/Alert.jsx';
 import Badge from '../../components/ui/Badge.jsx';
 import Button from '../../components/ui/Button.jsx';
@@ -12,6 +12,7 @@ import { orderService } from '../../services/orderService.js';
 import { formatCurrency } from '../../utils/formatters.js';
 
 const statusVariant = {
+  AGUARDANDO_PAGAMENTO: 'warning',
   ABERTO: 'orange',
   ACEITO: 'blue',
   EM_PREPARO: 'blue',
@@ -24,6 +25,7 @@ const statusVariant = {
 
 function OrderCard({ order, onCancel }) {
   const canCustomerCancel = order.status === 'ABERTO';
+  const canPayPix = order.status === 'AGUARDANDO_PAGAMENTO' && order.payment_method === 'PIX_ONLINE';
   const canTrack = order.status === 'EM_ENTREGA';
   const deliveryConfirmationCode = order.delivery_confirmation_code;
 
@@ -36,7 +38,7 @@ function OrderCard({ order, onCancel }) {
             <Badge variant={statusVariant[order.status] ?? 'slate'}>{order.status}</Badge>
           </div>
           <p className="mt-1 text-sm text-ink-500">
-            {order.company?.name ?? 'Empresa'} · pagamento na entrega: {order.payment_method}
+            {order.company?.name ?? 'Empresa'} · {order.payment_method === 'PIX_ONLINE' ? 'Pix online' : `pagamento na entrega: ${order.payment_method}`}
           </p>
         </div>
         <p className="text-xl font-semibold text-coral-700 md:text-2xl">{formatCurrency(order.total)}</p>
@@ -97,6 +99,12 @@ function OrderCard({ order, onCancel }) {
       ) : null}
 
       <div className="flex flex-wrap gap-2">
+        {canPayPix ? (
+          <Link to={`/checkout/pix/${order.id}`} className="app-button-primary">
+            <QrCode className="h-4 w-4" />
+            Pagar com Pix
+          </Link>
+        ) : null}
         {canTrack ? (
           <Link to={`/customer/orders/${order.id}/tracking`} className="app-button-secondary">
             <MapPinned className="h-4 w-4" />

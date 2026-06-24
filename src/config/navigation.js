@@ -3,6 +3,7 @@ import {
   Bike,
   Building2,
   ClipboardList,
+  CreditCard,
   Home,
   LayoutDashboard,
   MapPin,
@@ -67,6 +68,12 @@ export const NAVIGATION_ITEMS = [
     label: 'Pedidos recebidos',
     path: '/company/orders',
     icon: ClipboardList,
+    roles: ['COMPANY'],
+  },
+  {
+    label: 'Mercado Pago',
+    path: '/company/mercado-pago',
+    icon: CreditCard,
     roles: ['COMPANY'],
   },
   {

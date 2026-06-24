@@ -4,6 +4,7 @@
  * de forma legível, evitando strings de enum cru ("EM_PREPARO") na interface.
  */
 export const ORDER_STATUS = {
+  AGUARDANDO_PAGAMENTO: { label: 'Aguardando pagamento', variant: 'warning' },
   ABERTO: { label: 'Aberto', variant: 'warning' },
   ACEITO: { label: 'Aceito', variant: 'info' },
   EM_PREPARO: { label: 'Em preparo', variant: 'info' },

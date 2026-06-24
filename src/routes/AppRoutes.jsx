@@ -9,6 +9,7 @@ import CompanyOrders from '../pages/company/CompanyOrders.jsx';
 import CompanyOverview from '../pages/company/CompanyOverview.jsx';
 import CompanyProducts from '../pages/company/CompanyProducts.jsx';
 import CompanySettings from '../pages/company/CompanySettings.jsx';
+import MercadoPagoSettings from '../pages/company/MercadoPagoSettings.jsx';
 import CourierAvailability from '../pages/courier/CourierAvailability.jsx';
 import CourierAvailableDeliveries from '../pages/courier/CourierAvailableDeliveries.jsx';
 import CourierMyDeliveries from '../pages/courier/CourierMyDeliveries.jsx';
@@ -16,6 +17,7 @@ import CustomerAddresses from '../pages/customer/CustomerAddresses.jsx';
 import CustomerExplore from '../pages/customer/CustomerExplore.jsx';
 import CustomerOrders from '../pages/customer/CustomerOrders.jsx';
 import CustomerOrderTracking from '../pages/customer/CustomerOrderTracking.jsx';
+import CustomerPixCheckout from '../pages/customer/CustomerPixCheckout.jsx';
 import CustomerRestaurant from '../pages/customer/CustomerRestaurant.jsx';
 import NotFound from '../pages/shared/NotFound.jsx';
 import Profile from '../pages/shared/Profile.jsx';
@@ -62,6 +64,8 @@ export default function AppRoutes() {
               <Route path="company/overview" element={<CompanyOverview />} />
               <Route path="company/products" element={<CompanyProducts />} />
               <Route path="company/orders" element={<CompanyOrders />} />
+              <Route path="company/mercado-pago" element={<MercadoPagoSettings />} />
+              <Route path="empresa/mercado-pago" element={<MercadoPagoSettings />} />
               <Route path="company/settings" element={<CompanySettings />} />
             </Route>
           </Route>
@@ -70,6 +74,7 @@ export default function AppRoutes() {
             <Route element={<OnboardingGuard />}>
               <Route path="customer/explore" element={<CustomerExplore />} />
               <Route path="customer/explore/:companyId" element={<CustomerRestaurant />} />
+              <Route path="checkout/pix/:orderId" element={<CustomerPixCheckout />} />
               <Route path="customer/orders" element={<CustomerOrders />} />
               <Route path="customer/orders/:orderId/tracking" element={<CustomerOrderTracking />} />
               <Route path="customer/addresses" element={<CustomerAddresses />} />

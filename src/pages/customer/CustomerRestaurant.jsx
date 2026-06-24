@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { ArrowLeft, MapPin, Minus, Plus, RefreshCw, ShoppingCart, Store, Trash2 } from 'lucide-react';
 import Alert from '../../components/ui/Alert.jsx';
@@ -22,6 +22,9 @@ const paymentMethods = [
   { value: 'PIX', label: 'Pix na entrega' },
   { value: 'DINHEIRO', label: 'Dinheiro na entrega' },
 ];
+
+const PIX_ONLINE_PAYMENT_METHOD = 'PIX_ONLINE';
+const pixOnlinePaymentMethod = { value: 'PIX_ONLINE', label: 'Pix online' };
 
 function ProductCard({ product, company, onAdd }) {
   return (
@@ -54,9 +57,11 @@ function ProductCard({ product, company, onAdd }) {
 
 export default function CustomerRestaurant() {
   const { companyId } = useParams();
+  const navigate = useNavigate();
   const [company, setCompany] = useState(null);
   const [products, setProducts] = useState([]);
   const [locationStatus, setLocationStatus] = useState(null);
+  const [paymentAvailability, setPaymentAvailability] = useState(null);
   const [calculation, setCalculation] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('PIX');
   const [notes, setNotes] = useState('');
@@ -79,19 +84,26 @@ export default function CustomerRestaurant() {
   const isCartFromThisCompany = cartCompany?.id === Number(companyId);
   const visibleCartItems = isCartFromThisCompany ? cartItems : [];
   const canCheckout = visibleCartItems.length > 0 && locationStatus?.has_active_location;
+  const pixOnlineAvailable = Boolean(paymentAvailability?.pix_online_available);
+  const availablePaymentMethods = useMemo(
+    () => (pixOnlineAvailable ? [...paymentMethods, pixOnlinePaymentMethod] : paymentMethods),
+    [pixOnlineAvailable],
+  );
 
   async function loadPage() {
     setLoading(true);
     setError(null);
 
     try {
-      const [companyResponse, statusResponse] = await Promise.all([
+      const [companyResponse, statusResponse, availabilityResponse] = await Promise.all([
         companyService.getById(companyId),
         customerAddressService.getLocationStatus(),
+        orderService.getCompanyPaymentAvailability(companyId).catch(() => null),
       ]);
 
       setCompany(companyResponse);
       setLocationStatus(statusResponse);
+      setPaymentAvailability(availabilityResponse);
 
       if (!statusResponse?.has_active_location) {
         setProducts([]);
@@ -113,6 +125,12 @@ export default function CustomerRestaurant() {
     loadPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
+
+  useEffect(() => {
+    if (paymentMethod === PIX_ONLINE_PAYMENT_METHOD && !pixOnlineAvailable) {
+      setPaymentMethod('PIX');
+    }
+  }, [paymentMethod, pixOnlineAvailable]);
 
   function handleAddItem(selectedCompany, product) {
     const result = addItem(
@@ -137,18 +155,18 @@ export default function CustomerRestaurant() {
     setCalculation(null);
 
     try {
-      const response = await orderService.calculate(buildOrderPayload());
+      const response = await orderService.calculate(buildOrderPayload(paymentMethod));
       setCalculation(response);
     } catch (requestError) {
       toast.error(getApiErrorMessage(requestError, 'Não foi possível calcular o pedido.'));
     }
   }
 
-  function buildOrderPayload() {
+  function buildOrderPayload(selectedPaymentMethod = paymentMethod) {
     return {
       company_id: Number(companyId),
       customer_address_id: locationStatus?.default_address?.id,
-      payment_method: paymentMethod,
+      payment_method: selectedPaymentMethod,
       notes: notes.trim() || null,
       items: visibleCartItems.map((item) => ({
         product_id: item.product_id,
@@ -157,11 +175,45 @@ export default function CustomerRestaurant() {
     };
   }
 
+  function handlePaymentMethodChange(event) {
+    setPaymentMethod(event.target.value);
+  }
+
   async function submitOrder() {
+    const selectedPaymentMethod = paymentMethod;
+    const payload = buildOrderPayload(selectedPaymentMethod);
+
+    if (selectedPaymentMethod === PIX_ONLINE_PAYMENT_METHOD && !pixOnlineAvailable) {
+      toast.error('Pix online não está disponível para esta empresa.');
+      return;
+    }
+
     setSubmittingOrder(true);
 
     try {
-      await orderService.create(buildOrderPayload());
+      if (selectedPaymentMethod === PIX_ONLINE_PAYMENT_METHOD) {
+        const pixResponse = await orderService.createPix(payload);
+
+        if (!pixResponse?.order_id) {
+          console.error('Resposta de criação Pix sem order_id.', pixResponse);
+          throw new Error('O backend não retornou o identificador do pedido Pix.');
+        }
+
+        if (!pixResponse?.qr_code || !pixResponse?.qr_code_base64) {
+          console.error('Resposta de criação Pix sem QR Code ou Pix copia e cola.', pixResponse);
+          toast.error('Pedido Pix criado, mas o backend não retornou os dados do QR Code.');
+        }
+
+        toast.success('Pedido criado. Conclua o pagamento via Pix.');
+        clearCart();
+        setCheckoutOpen(false);
+        setCalculation(null);
+        setNotes('');
+        navigate(`/checkout/pix/${pixResponse.order_id}`, { state: pixResponse });
+        return;
+      }
+
+      await orderService.create(payload);
       toast.success('Pedido enviado para o estabelecimento.');
       clearCart();
       setCheckoutOpen(false);
@@ -295,11 +347,13 @@ export default function CustomerRestaurant() {
       <Modal
         open={checkoutOpen}
         title="Finalizar pedido"
-        description="O pagamento será feito na entrega. A plataforma não processa pagamento online."
-        onClose={() => setCheckoutOpen(false)}
+        description={pixOnlineAvailable ? 'Escolha entre pagar na entrega ou pagar agora com Pix online.' : 'O pagamento será feito na entrega.'}
+        onClose={() => {
+          if (!submittingOrder) setCheckoutOpen(false);
+        }}
         footer={
           <>
-            <Button type="button" variant="ghost" onClick={() => setCheckoutOpen(false)}>Cancelar</Button>
+            <Button type="button" variant="ghost" onClick={() => setCheckoutOpen(false)} disabled={submittingOrder}>Cancelar</Button>
             <Button type="button" disabled={submittingOrder || !calculation} onClick={submitOrder}>
               {submittingOrder ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
               Confirmar pedido
@@ -310,11 +364,27 @@ export default function CustomerRestaurant() {
         <div className="space-y-5">
           <div className="space-y-2">
             <label className="app-label" htmlFor="payment-method">Forma de pagamento</label>
-            <select id="payment-method" className="app-input" value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
-              {paymentMethods.map((method) => (
+            <select
+              id="payment-method"
+              className="app-input"
+              value={paymentMethod}
+              onChange={handlePaymentMethodChange}
+              disabled={submittingOrder}
+            >
+              {availablePaymentMethods.map((method) => (
                 <option key={method.value} value={method.value}>{method.label}</option>
               ))}
             </select>
+            {!pixOnlineAvailable ? (
+              <p className="text-xs font-medium text-slate-500">
+                Pix online aparece aqui quando a empresa tem Mercado Pago conectado e ativo.
+              </p>
+            ) : null}
+            {paymentMethod === PIX_ONLINE_PAYMENT_METHOD ? (
+              <Alert variant="info" title="Pix online">
+                O pedido será criado como aguardando pagamento. Após o Pix ser aprovado, ele será liberado para o estabelecimento.
+              </Alert>
+            ) : null}
           </div>
 
           <div className="space-y-2">
