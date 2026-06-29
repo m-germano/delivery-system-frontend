@@ -30,4 +30,19 @@ export const companyService = {
     const { data } = await api.put('/companies/me', payload);
     return data;
   },
+
+  async getMyOrderSettings() {
+    const { data } = await api.get('/companies/me/order-settings');
+    return data;
+  },
+
+  async updateMyOrderSettings(payload) {
+    const { data } = await api.put('/companies/me/order-settings', payload);
+    return data;
+  },
+
+  async getOrderSettings(companyId) {
+    const { data } = await api.get(`/companies/${companyId}/order-settings`);
+    return data;
+  },
 };

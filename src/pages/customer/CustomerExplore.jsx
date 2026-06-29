@@ -5,6 +5,7 @@ import Alert from '../../components/ui/Alert.jsx';
 import Button from '../../components/ui/Button.jsx';
 import EmptyState from '../../components/ui/EmptyState.jsx';
 import PageHeader from '../../components/ui/PageHeader.jsx';
+import StarRating from '../../components/ui/StarRating.jsx';
 import { getApiErrorMessage } from '../../services/api.js';
 import { companyService } from '../../services/companyService.js';
 import { customerAddressService } from '../../services/customerAddressService.js';
@@ -65,6 +66,8 @@ function RestaurantCard({ restaurant }) {
   const imageUrl = getRestaurantImage(restaurant);
   const deliveryFee = toNumber(restaurant.delivery_fee);
   const isFreeDelivery = deliveryFee !== null && deliveryFee <= 0;
+  const reviewsCount = Number(restaurant.reviews_count ?? 0);
+  const averageRating = Number(restaurant.average_rating ?? 0);
 
   return (
     <Link
@@ -106,6 +109,14 @@ function RestaurantCard({ restaurant }) {
               <span className="truncate">{formatAddress(restaurant.address)}</span>
             </div>
           ) : null}
+
+          <div className="mt-2">
+            {reviewsCount > 0 ? (
+              <StarRating rating={averageRating} readOnly size="sm" showValue count={reviewsCount} />
+            ) : (
+              <span className="text-xs font-medium text-ink-400">Sem avaliações ainda</span>
+            )}
+          </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-ink-500">
             <span className="inline-flex items-center gap-1">

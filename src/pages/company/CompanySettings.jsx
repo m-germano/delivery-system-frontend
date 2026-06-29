@@ -26,6 +26,13 @@ const emptyForm = {
   longitude: '',
 };
 
+const defaultOrderSettingsForm = {
+  accepts_delivery: true,
+  accepts_pickup: false,
+  pickup_discount_percent: '0',
+  minimum_order_value: '0',
+};
+
 function onlyDigits(value) {
   return String(value ?? '').replace(/\D/g, '');
 }
@@ -85,6 +92,7 @@ function ReadOnlyField({ label, value, placeholder = 'Preenchido automaticamente
 
 export default function CompanySettings() {
   const [form, setForm] = useState(emptyForm);
+  const [orderSettingsForm, setOrderSettingsForm] = useState(defaultOrderSettingsForm);
   const [company, setCompany] = useState(null);
   const [mode, setMode] = useState('create');
   const [loading, setLoading] = useState(true);
@@ -112,6 +120,12 @@ export default function CompanySettings() {
 
       return next;
     });
+    setError(null);
+    setSuccess(null);
+  }
+
+  function updateOrderSettingsField(field, value) {
+    setOrderSettingsForm((current) => ({ ...current, [field]: value }));
     setError(null);
     setSuccess(null);
   }
@@ -145,12 +159,24 @@ export default function CompanySettings() {
         setCompany(currentCompany);
         setForm(companyToForm(currentCompany));
         setMode('edit');
+
+        const settings = await companyService.getMyOrderSettings().catch(() => null);
+        if (!isMounted) return;
+        if (settings) {
+          setOrderSettingsForm({
+            accepts_delivery: Boolean(settings.accepts_delivery),
+            accepts_pickup: Boolean(settings.accepts_pickup),
+            pickup_discount_percent: String(settings.pickup_discount_percent ?? 0),
+            minimum_order_value: String(settings.minimum_order_value ?? 0),
+          });
+        }
       } catch (requestError) {
         if (!isMounted) return;
 
         if (requestError?.response?.status === 404) {
           setCompany(null);
           setForm(emptyForm);
+          setOrderSettingsForm(defaultOrderSettingsForm);
           setMode('create');
           return;
         }
@@ -221,6 +247,15 @@ export default function CompanySettings() {
     };
   }
 
+  function buildOrderSettingsPayload() {
+    return {
+      accepts_delivery: Boolean(orderSettingsForm.accepts_delivery),
+      accepts_pickup: Boolean(orderSettingsForm.accepts_pickup),
+      pickup_discount_percent: Number(orderSettingsForm.pickup_discount_percent || 0),
+      minimum_order_value: Number(orderSettingsForm.minimum_order_value || 0),
+    };
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -244,6 +279,22 @@ export default function CompanySettings() {
       return;
     }
 
+    const orderSettingsPayload = buildOrderSettingsPayload();
+    if (!orderSettingsPayload.accepts_delivery && !orderSettingsPayload.accepts_pickup) {
+      setError('Ative delivery, retirada ou ambos.');
+      return;
+    }
+
+    if (orderSettingsPayload.pickup_discount_percent < 0 || orderSettingsPayload.pickup_discount_percent > 100) {
+      setError('O desconto para retirada deve estar entre 0% e 100%.');
+      return;
+    }
+
+    if (orderSettingsPayload.minimum_order_value < 0) {
+      setError('O pedido mínimo não pode ser negativo.');
+      return;
+    }
+
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -251,9 +302,16 @@ export default function CompanySettings() {
     try {
       const payload = buildPayload();
       const savedCompany = mode === 'edit' ? await companyService.updateMine(payload) : await companyService.create(payload);
+      const savedSettings = await companyService.updateMyOrderSettings(orderSettingsPayload);
 
       setCompany(savedCompany);
       setForm(companyToForm(savedCompany));
+      setOrderSettingsForm({
+        accepts_delivery: Boolean(savedSettings.accepts_delivery),
+        accepts_pickup: Boolean(savedSettings.accepts_pickup),
+        pickup_discount_percent: String(savedSettings.pickup_discount_percent ?? 0),
+        minimum_order_value: String(savedSettings.minimum_order_value ?? 0),
+      });
       setMode('edit');
       await loadCompletionStatus();
       setSuccess('Empresa salva com sucesso.');
@@ -395,6 +453,58 @@ export default function CompanySettings() {
             Endereço pronto para salvar.
           </div>
         ) : null}
+      </Section>
+
+      <Section title="Entrega e retirada" description="Defina como os clientes podem receber seus pedidos e as regras comerciais básicas.">
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="flex items-start gap-3 rounded-2xl border border-ink-200 bg-white p-4">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-ink-300 text-orange-600"
+              checked={orderSettingsForm.accepts_delivery}
+              onChange={(event) => updateOrderSettingsField('accepts_delivery', event.target.checked)}
+            />
+            <span>
+              <span className="block text-sm font-bold text-ink-900">Aceita delivery</span>
+              <span className="mt-1 block text-xs leading-5 text-ink-500">Pedidos com endereço, taxa de entrega e fluxo de motoboy.</span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-3 rounded-2xl border border-ink-200 bg-white p-4">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 rounded border-ink-300 text-orange-600"
+              checked={orderSettingsForm.accepts_pickup}
+              onChange={(event) => updateOrderSettingsField('accepts_pickup', event.target.checked)}
+            />
+            <span>
+              <span className="block text-sm font-bold text-ink-900">Aceita retirada na loja</span>
+              <span className="mt-1 block text-xs leading-5 text-ink-500">Pedidos sem endereço, sem taxa e sem envio para motoboy.</span>
+            </span>
+          </label>
+        </div>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <InputField
+            id="pickup-discount-percent"
+            label="Desconto para retirada (%)"
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            value={orderSettingsForm.pickup_discount_percent}
+            onChange={(event) => updateOrderSettingsField('pickup_discount_percent', event.target.value)}
+          />
+          <InputField
+            id="minimum-order-value"
+            label="Pedido mínimo (R$)"
+            type="number"
+            min="0"
+            step="0.01"
+            value={orderSettingsForm.minimum_order_value}
+            onChange={(event) => updateOrderSettingsField('minimum_order_value', event.target.value)}
+          />
+        </div>
       </Section>
     </form>
   );
