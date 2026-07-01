@@ -248,19 +248,7 @@ export default function MercadoPagoSettings() {
         Você será redirecionado para o Mercado Pago para autorizar a conexão. Após a autorização, voltará automaticamente para esta tela.
       </Alert>
 
-      <section className="app-card p-5 md:p-6">
-        <div className="flex items-start gap-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
-            <ShieldCheck className="h-5 w-5" />
-          </div>
-          <div>
-            <h3 className="font-black text-ink-900">Segurança da conexão</h3>
-            <p className="mt-1 text-sm leading-6 text-ink-500">
-              O frontend não recebe, exibe, armazena ou troca tokens do Mercado Pago. O callback OAuth e o armazenamento criptografado ficam no backend.
-            </p>
-          </div>
-        </div>
-      </section>
+
     </div>
   );
 }

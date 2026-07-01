@@ -75,6 +75,7 @@ export default function Sidebar({ mobile = false }) {
     setAccountMenuOpen(false);
     logout();
     if (mobile) closeMobileSidebar();
+    navigate('/login', { replace: true, state: null });
   }
 
   return (
@@ -181,3 +182,4 @@ export default function Sidebar({ mobile = false }) {
     </aside>
   );
 }
+

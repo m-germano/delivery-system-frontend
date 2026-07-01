@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import LoadingScreen from '../components/ui/LoadingScreen.jsx';
 import { getRoleKey } from '../config/roles.js';
+import { getDefaultRouteForUser } from '../utils/authRedirect.js';
 import { useAuthStore } from '../stores/useAuthStore.js';
 
 const SETUP_PATHS_BY_ROLE = Object.freeze({
@@ -46,14 +47,25 @@ export function AuthGuard() {
 export function PublicOnlyRoute({ children }) {
   const token = useAuthStore((state) => state.token);
   const user = useAuthStore((state) => state.user);
+  const status = useAuthStore((state) => state.status);
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
+  const loadCurrentUser = useAuthStore((state) => state.loadCurrentUser);
 
-  if (!hasHydrated) {
-    return children;
+  useEffect(() => {
+    if (!hasHydrated) return;
+    if (!token) return;
+    if (user) return;
+    if (status === 'loading') return;
+
+    loadCurrentUser();
+  }, [hasHydrated, loadCurrentUser, status, token, user]);
+
+  if (!hasHydrated || (token && !user)) {
+    return <LoadingScreen message="Carregando sua sessão..." />;
   }
 
   if (token && user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={getDefaultRouteForUser(user)} replace />;
   }
 
   return children;
@@ -61,10 +73,11 @@ export function PublicOnlyRoute({ children }) {
 
 export function RoleGuard({ roles }) {
   const user = useAuthStore((state) => state.user);
+  const location = useLocation();
   const roleKey = getRoleKey(user);
 
   if (!roles.includes(roleKey)) {
-    return <Navigate to="/unauthorized" replace />;
+    return <Navigate to="/unauthorized" replace state={{ attemptedPath: location.pathname }} />;
   }
 
   return <Outlet />;

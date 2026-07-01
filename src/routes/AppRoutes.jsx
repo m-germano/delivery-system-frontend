@@ -77,6 +77,7 @@ export default function AppRoutes() {
               <Route path="customer/explore" element={<CustomerExplore />} />
               <Route path="customer/explore/:companyId" element={<CustomerRestaurant />} />
               <Route path="checkout/pix/:orderId" element={<CustomerPixCheckout />} />
+              <Route path="checkout/mercado-pago/:orderId" element={<CustomerPixCheckout />} />
               <Route path="customer/orders" element={<CustomerOrders />} />
               <Route path="customer/orders/:orderId/tracking" element={<CustomerOrderTracking />} />
               <Route path="customer/addresses" element={<CustomerAddresses />} />

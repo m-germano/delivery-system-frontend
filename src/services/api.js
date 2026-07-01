@@ -7,6 +7,10 @@ export const AUTH_EXPIRED_EVENT = 'delivery:auth-expired';
 
 let accessToken = null;
 
+function canUseLocalStorage() {
+  return typeof window !== 'undefined' && Boolean(window.localStorage);
+}
+
 export function setApiAccessToken(token) {
   accessToken = token || null;
 }
@@ -18,6 +22,8 @@ export function clearApiAccessToken() {
 export function clearAuthStorage() {
   accessToken = null;
 
+  if (!canUseLocalStorage()) return;
+
   try {
     window.localStorage.removeItem(AUTH_STORAGE_KEY);
   } catch {
@@ -25,16 +31,22 @@ export function clearAuthStorage() {
   }
 }
 
-export function getStoredToken() {
+export function getStoredAuthState() {
+  if (!canUseLocalStorage()) return null;
+
   try {
     const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) return null;
 
     const parsed = JSON.parse(raw);
-    return parsed?.state?.token ?? null;
+    return parsed?.state ?? null;
   } catch {
     return null;
   }
+}
+
+export function getStoredToken() {
+  return getStoredAuthState()?.token ?? null;
 }
 
 export function getAccessToken() {

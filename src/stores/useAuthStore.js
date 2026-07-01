@@ -5,6 +5,7 @@ import {
   AUTH_EXPIRED_EVENT,
   clearAuthStorage,
   getApiErrorMessage,
+  getStoredToken,
   setApiAccessToken,
 } from '../services/api.js';
 import { authService } from '../services/authService.js';
@@ -23,6 +24,10 @@ function extractToken(loginResponse) {
   return loginResponse?.access_token ?? loginResponse?.token ?? loginResponse?.accessToken ?? null;
 }
 
+function getEffectiveToken(stateToken) {
+  return stateToken || getStoredToken();
+}
+
 export const useAuthStore = create(
   persist(
     (set, get) => ({
@@ -32,7 +37,7 @@ export const useAuthStore = create(
         return getRoleKey(get().user);
       },
 
-      isAuthenticated: () => Boolean(get().token),
+      isAuthenticated: () => Boolean(getEffectiveToken(get().token)),
 
       hasAnyRole: (roles = []) => {
         const roleKey = getRoleKey(get().user);
@@ -46,11 +51,12 @@ export const useAuthStore = create(
           return;
         }
 
-        const token = get().token;
+        const token = getEffectiveToken(get().token);
 
         if (token) {
           setApiAccessToken(token);
           set({
+            token,
             hasHydrated: true,
             status: get().user ? 'authenticated' : 'idle',
             error: null,
@@ -136,12 +142,13 @@ export const useAuthStore = create(
       },
 
       loadCurrentUser: async () => {
-        const token = get().token;
+        const token = getEffectiveToken(get().token);
 
         if (!token) {
           setApiAccessToken(null);
           set({
             user: null,
+            token: null,
             completionStatus: null,
             completionChecked: false,
             status: 'unauthenticated',
@@ -152,13 +159,14 @@ export const useAuthStore = create(
         }
 
         setApiAccessToken(token);
-        set({ status: 'loading', error: null });
+        set({ token, status: 'loading', error: null });
 
         try {
           const user = await authService.me();
 
           set({
             user,
+            token,
             status: 'authenticated',
             error: null,
             hasHydrated: true,
@@ -181,7 +189,7 @@ export const useAuthStore = create(
       },
 
       loadCompletionStatus: async () => {
-        const token = get().token;
+        const token = getEffectiveToken(get().token);
 
         if (!token) {
           set({

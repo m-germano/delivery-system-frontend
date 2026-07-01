@@ -92,7 +92,9 @@ export default function CompanyReviews() {
       <section className="app-card flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-orange-500">Resumo</p>
-          <h2 className="mt-1 text-2xl font-black text-slate-950">{reviews.reviews_count} avaliação(ões)</h2>
+          <h2 className="mt-1 text-2xl font-black text-slate-950">
+            {reviews.reviews_count} {reviews.reviews_count === 1 ? "Avaliação" : "Avaliações"}
+          </h2>
         </div>
         <StarRating rating={reviews.average_rating ?? 0} readOnly size="lg" showValue count={reviews.reviews_count} />
       </section>

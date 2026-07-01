@@ -3,6 +3,7 @@ import { Bike, Store, UserRound } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Alert from '../../components/ui/Alert.jsx';
 import { PUBLIC_REGISTER_ROLES, ROLE_IDS } from '../../config/roles.js';
+import { resolvePostLoginRedirect } from '../../utils/authRedirect.js';
 import { useAuthStore } from '../../stores/useAuthStore.js';
 import { cn } from '../../utils/classNames.js';
 import logo from '../../assets/dishdash-light.png';
@@ -143,9 +144,9 @@ export default function Login({ initialMode = 'login' }) {
     resetMessages();
 
     try {
-      await login(loginForm);
-      const redirectTo = location.state?.from?.pathname ?? '/';
-      navigate(redirectTo, { replace: true });
+      const user = await login(loginForm);
+      const redirectTo = resolvePostLoginRedirect(user, location.state?.from?.pathname);
+      navigate(redirectTo, { replace: true, state: null });
     } catch (loginError) {
       setError(loginError.message);
     }
@@ -368,3 +369,4 @@ export default function Login({ initialMode = 'login' }) {
     </main>
   );
 }
+

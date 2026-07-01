@@ -26,7 +26,7 @@ const paymentMethods = [
 ];
 
 const PIX_ONLINE_PAYMENT_METHOD = 'PIX_ONLINE';
-const pixOnlinePaymentMethod = { value: 'PIX_ONLINE', label: 'Pix online' };
+const pixOnlinePaymentMethod = { value: PIX_ONLINE_PAYMENT_METHOD, label: 'Pagamento online / Mercado Pago' };
 const FULFILLMENT_DELIVERY = 'DELIVERY';
 const FULFILLMENT_PICKUP = 'PICKUP';
 
@@ -36,6 +36,65 @@ const defaultOrderSettings = {
   pickup_discount_percent: 0,
   minimum_order_value: 0,
 };
+
+function getCheckoutUrl(response) {
+  if (!response) return null;
+
+  const payment = response.payment ?? {};
+  const rawResponse = response.raw_response ?? payment.raw_response ?? {};
+
+  return (
+    response.checkout_url ??
+    response.checkoutUrl ??
+    response.init_point ??
+    response.sandbox_checkout_url ??
+    response.sandbox_init_point ??
+    response.payment_url ??
+    payment.checkout_url ??
+    payment.checkoutUrl ??
+    payment.init_point ??
+    payment.sandbox_checkout_url ??
+    payment.sandbox_init_point ??
+    payment.payment_url ??
+    rawResponse.init_point ??
+    rawResponse.sandbox_init_point ??
+    null
+  );
+}
+
+function getCheckoutPreferenceId(response) {
+  if (!response) return null;
+
+  const payment = response.payment ?? {};
+  const rawResponse = response.raw_response ?? payment.raw_response ?? {};
+
+  return (
+    response.checkout_preference_id ??
+    response.preference_id ??
+    response.provider_order_id ??
+    payment.checkout_preference_id ??
+    payment.preference_id ??
+    payment.provider_order_id ??
+    rawResponse.id ??
+    rawResponse.preference_id ??
+    null
+  );
+}
+
+function buildCheckoutState(response) {
+  const checkoutUrl = getCheckoutUrl(response);
+  const preferenceId = getCheckoutPreferenceId(response);
+
+  return {
+    ...response,
+    checkout_url: response?.checkout_url ?? checkoutUrl,
+    checkoutUrl: response?.checkoutUrl ?? checkoutUrl,
+    init_point: response?.init_point ?? checkoutUrl,
+    checkout_preference_id: response?.checkout_preference_id ?? preferenceId,
+    preference_id: response?.preference_id ?? preferenceId,
+    provider_order_id: response?.provider_order_id ?? preferenceId,
+  };
+}
 
 function ProductCard({ product, company, onAdd }) {
   return (
@@ -47,6 +106,7 @@ function ProductCard({ product, company, onAdd }) {
           <div className="flex h-full items-center justify-center text-sm font-semibold text-slate-400">Sem imagem</div>
         )}
       </div>
+
       <div className="space-y-4 p-5">
         <div>
           <div className="flex items-start justify-between gap-3">
@@ -55,8 +115,10 @@ function ProductCard({ product, company, onAdd }) {
           </div>
           <p className="mt-1 text-sm font-bold text-orange-600">{formatCurrency(product.price)}</p>
         </div>
+
         {product.category?.name ? <Badge variant="blue">{product.category.name}</Badge> : null}
         {product.description ? <p className="text-sm leading-6 text-slate-500">{product.description}</p> : null}
+
         <Button type="button" className="w-full" onClick={() => onAdd(company, product)}>
           <Plus className="h-4 w-4" />
           Adicionar ao carrinho
@@ -72,10 +134,13 @@ function ReviewCard({ review }) {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-bold text-slate-900">{review.customer?.name ?? 'Cliente'}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-400">Pedido #{review.order_id} · {formatDateTime(review.created_at)}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-400">
+            Pedido #{review.order_id} · {formatDateTime(review.created_at)}
+          </p>
         </div>
         <StarRating rating={review.rating} readOnly />
       </div>
+
       {review.comment ? <p className="mt-3 text-sm leading-6 text-slate-600">{review.comment}</p> : null}
     </article>
   );
@@ -84,6 +149,7 @@ function ReviewCard({ review }) {
 export default function CustomerRestaurant() {
   const { companyId } = useParams();
   const navigate = useNavigate();
+
   const [company, setCompany] = useState(null);
   const [products, setProducts] = useState([]);
   const [locationStatus, setLocationStatus] = useState(null);
@@ -119,6 +185,7 @@ export default function CustomerRestaurant() {
     () => cartItems.reduce((total, item) => total + Number(item.price) * item.quantity, 0),
     [cartItems],
   );
+
   const isCartFromThisCompany = cartCompany?.id === Number(companyId);
   const visibleCartItems = isCartFromThisCompany ? cartItems : [];
   const acceptsDelivery = Boolean(orderSettings?.accepts_delivery);
@@ -129,25 +196,24 @@ export default function CustomerRestaurant() {
     visibleCartItems.length > 0 &&
     (acceptsPickup || (acceptsDelivery && locationStatus?.has_active_location));
   const pixOnlineAvailable = Boolean(paymentAvailability?.pix_online_available);
-  const availablePaymentMethods = useMemo(
-    () => {
-      const labels = isPickup
-        ? [
-            { value: 'CREDITO', label: 'Crédito na retirada' },
-            { value: 'DEBITO', label: 'Débito na retirada' },
-            { value: 'PIX', label: 'Pix na retirada' },
-            { value: 'DINHEIRO', label: 'Dinheiro na retirada' },
-          ]
-        : paymentMethods;
 
-      if (!pixOnlineAvailable) return labels;
-      return [
-        ...labels,
-        isPickup ? { value: 'PIX_ONLINE', label: 'Pix online / pagar agora' } : pixOnlinePaymentMethod,
-      ];
-    },
-    [isPickup, pixOnlineAvailable],
-  );
+  const availablePaymentMethods = useMemo(() => {
+    const labels = isPickup
+      ? [
+        { value: 'CREDITO', label: 'Crédito na retirada' },
+        { value: 'DEBITO', label: 'Débito na retirada' },
+        { value: 'PIX', label: 'Pix na retirada' },
+        { value: 'DINHEIRO', label: 'Dinheiro na retirada' },
+      ]
+      : paymentMethods;
+
+    if (!pixOnlineAvailable) return labels;
+
+    return [
+      ...labels,
+      isPickup ? { value: PIX_ONLINE_PAYMENT_METHOD, label: 'Pagamento online / Mercado Pago' } : pixOnlinePaymentMethod,
+    ];
+  }, [isPickup, pixOnlineAvailable]);
 
   async function loadPage() {
     setLoading(true);
@@ -164,6 +230,7 @@ export default function CustomerRestaurant() {
       setCompany(companyResponse);
       setLocationStatus(statusResponse);
       setPaymentAvailability(availabilityResponse);
+
       const resolvedSettings = orderSettingsResponse ?? defaultOrderSettings;
       setOrderSettings(resolvedSettings);
 
@@ -231,6 +298,7 @@ export default function CustomerRestaurant() {
 
   async function openCheckout() {
     if (!canCheckout) return;
+
     setCheckoutOpen(true);
     setCalculation(null);
 
@@ -263,6 +331,7 @@ export default function CustomerRestaurant() {
 
   async function recalculateCheckout(selectedPaymentMethod, selectedFulfillmentType) {
     setCalculation(null);
+
     try {
       const response = await orderService.calculate(buildOrderPayload(selectedPaymentMethod, selectedFulfillmentType));
       setCalculation(response);
@@ -274,6 +343,7 @@ export default function CustomerRestaurant() {
   function handlePaymentMethodChange(event) {
     const nextPaymentMethod = event.target.value;
     setPaymentMethod(nextPaymentMethod);
+
     if (checkoutOpen) {
       recalculateCheckout(nextPaymentMethod, fulfillmentType);
     }
@@ -282,8 +352,10 @@ export default function CustomerRestaurant() {
   function handleFulfillmentTypeChange(event) {
     const nextFulfillmentType = event.target.value;
     const nextPaymentMethod = paymentMethod;
+
     setFulfillmentType(nextFulfillmentType);
     setPaymentMethod(nextPaymentMethod);
+
     if (checkoutOpen) {
       recalculateCheckout(nextPaymentMethod, nextFulfillmentType);
     }
@@ -294,7 +366,7 @@ export default function CustomerRestaurant() {
     const payload = buildOrderPayload(selectedPaymentMethod);
 
     if (selectedPaymentMethod === PIX_ONLINE_PAYMENT_METHOD && !pixOnlineAvailable) {
-      toast.error('Pix online não está disponível para esta empresa.');
+      toast.error('Pagamento online não está disponível para esta empresa.');
       return;
     }
 
@@ -302,24 +374,31 @@ export default function CustomerRestaurant() {
 
     try {
       if (selectedPaymentMethod === PIX_ONLINE_PAYMENT_METHOD) {
-        const pixResponse = await orderService.createPix(payload);
+        const checkoutResponse = await orderService.createPix(payload);
 
-        if (!pixResponse?.order_id) {
-          console.error('Resposta de criação Pix sem order_id.', pixResponse);
-          throw new Error('O backend não retornou o identificador do pedido Pix.');
+        if (!checkoutResponse?.order_id) {
+          console.error('Resposta de criação de pagamento online sem order_id.', checkoutResponse);
+          throw new Error('O backend não retornou o identificador do pedido.');
         }
 
-        if (!pixResponse?.qr_code || !pixResponse?.qr_code_base64) {
-          console.error('Resposta de criação Pix sem QR Code ou Pix copia e cola.', pixResponse);
-          toast.error('Pedido Pix criado, mas o backend não retornou os dados do QR Code.');
+        const checkoutUrl = getCheckoutUrl(checkoutResponse);
+        const checkoutState = buildCheckoutState(checkoutResponse);
+
+        if (!checkoutUrl) {
+          console.error('Resposta de criação Checkout Pro sem link de pagamento.', checkoutResponse);
+          throw new Error('Pedido criado, mas o backend não retornou o link do Checkout Pro.');
         }
 
-        toast.success('Pedido criado. Conclua o pagamento via Pix.');
+        toast.success('Pedido criado. Conclua o pagamento no Mercado Pago.');
         clearCart();
         setCheckoutOpen(false);
         setCalculation(null);
         setNotes('');
-        navigate(`/checkout/pix/${pixResponse.order_id}`, { state: pixResponse });
+
+        navigate(`/checkout/pix/${checkoutResponse.order_id}`, {
+          state: checkoutState,
+        });
+
         return;
       }
 
@@ -352,7 +431,11 @@ export default function CustomerRestaurant() {
         </div>
       ) : null}
 
-      {error ? <Alert variant="error" title="Atenção">{error}</Alert> : null}
+      {error ? (
+        <Alert variant="error" title="Atenção">
+          {error}
+        </Alert>
+      ) : null}
 
       {company ? (
         <>
@@ -366,6 +449,7 @@ export default function CustomerRestaurant() {
               </Button>
             }
           />
+
           <div className="app-card flex flex-wrap items-center justify-between gap-3 p-4">
             <div className="flex items-center gap-3">
               <div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-50 text-amber-600">
@@ -380,7 +464,13 @@ export default function CustomerRestaurant() {
                 </p>
               </div>
             </div>
-            <StarRating rating={company.average_rating ?? reviews.average_rating ?? 0} readOnly showValue count={company.reviews_count ?? reviews.reviews_count ?? 0} />
+
+            <StarRating
+              rating={company.average_rating ?? reviews.average_rating ?? 0}
+              readOnly
+              showValue
+              count={company.reviews_count ?? reviews.reviews_count ?? 0}
+            />
           </div>
         </>
       ) : null}
@@ -388,7 +478,9 @@ export default function CustomerRestaurant() {
       {!loading && acceptsDelivery && !locationStatus?.has_active_location ? (
         <Alert variant="warning" title="Localização não configurada">
           Cadastre um endereço padrão para pedidos delivery. Se a empresa aceitar retirada, você ainda pode retirar na loja.{' '}
-          <Link to="/customer/addresses" className="font-bold underline">Configurar endereço</Link>
+          <Link to="/customer/addresses" className="font-bold underline">
+            Configurar endereço
+          </Link>
         </Alert>
       ) : null}
 
@@ -449,6 +541,7 @@ export default function CustomerRestaurant() {
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
+
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <Button type="button" variant="secondary" className="px-3 py-2" onClick={() => updateQuantity(item.product_id, item.quantity - 1)}>
@@ -484,7 +577,13 @@ export default function CustomerRestaurant() {
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-orange-500">Avaliações</p>
             <h2 className="mt-1 text-xl font-black text-slate-950">O que os clientes dizem</h2>
           </div>
-          <StarRating rating={reviews.average_rating ?? company?.average_rating ?? 0} readOnly showValue count={reviews.reviews_count ?? company?.reviews_count ?? 0} />
+
+          <StarRating
+            rating={reviews.average_rating ?? company?.average_rating ?? 0}
+            readOnly
+            showValue
+            count={reviews.reviews_count ?? company?.reviews_count ?? 0}
+          />
         </div>
 
         {reviews.items.length === 0 ? (
@@ -498,12 +597,7 @@ export default function CustomerRestaurant() {
         )}
 
         {reviews.page < reviews.total_pages ? (
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => loadReviews(reviews.page + 1, { append: true })}
-            disabled={reviewsLoading}
-          >
+          <Button type="button" variant="secondary" onClick={() => loadReviews(reviews.page + 1, { append: true })} disabled={reviewsLoading}>
             <RefreshCw className={reviewsLoading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
             Carregar mais avaliações
           </Button>
@@ -513,13 +607,15 @@ export default function CustomerRestaurant() {
       <Modal
         open={checkoutOpen}
         title="Finalizar pedido"
-        description={isPickup ? 'Retirada na loja: sem taxa de entrega, com pagamento presencial ou Pix online.' : 'Delivery: escolha o pagamento e acompanhe seu pedido.'}
+        description={isPickup ? 'Retirada na loja: sem taxa de entrega, com pagamento presencial ou online.' : 'Delivery: escolha o pagamento e acompanhe seu pedido.'}
         onClose={() => {
           if (!submittingOrder) setCheckoutOpen(false);
         }}
         footer={
           <>
-            <Button type="button" variant="ghost" onClick={() => setCheckoutOpen(false)} disabled={submittingOrder}>Cancelar</Button>
+            <Button type="button" variant="ghost" onClick={() => setCheckoutOpen(false)} disabled={submittingOrder}>
+              Cancelar
+            </Button>
             <Button type="button" disabled={submittingOrder || !calculation} onClick={submitOrder}>
               {submittingOrder ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
               Confirmar pedido
@@ -529,7 +625,9 @@ export default function CustomerRestaurant() {
       >
         <div className="space-y-5">
           <div className="space-y-2">
-            <label className="app-label" htmlFor="fulfillment-type">Como deseja receber?</label>
+            <label className="app-label" htmlFor="fulfillment-type">
+              Como deseja receber?
+            </label>
             <select
               id="fulfillment-type"
               className="app-input"
@@ -540,6 +638,7 @@ export default function CustomerRestaurant() {
               {acceptsDelivery ? <option value={FULFILLMENT_DELIVERY}>Delivery</option> : null}
               {acceptsPickup ? <option value={FULFILLMENT_PICKUP}>Retirada na loja</option> : null}
             </select>
+
             {isPickup ? (
               <Alert variant="info" title="Retirada na loja">
                 Você retira o pedido no endereço da empresa. Não há taxa de entrega nem endereço do cliente nesta modalidade.
@@ -548,32 +647,34 @@ export default function CustomerRestaurant() {
           </div>
 
           <div className="space-y-2">
-            <label className="app-label" htmlFor="payment-method">Forma de pagamento</label>
-            <select
-              id="payment-method"
-              className="app-input"
-              value={paymentMethod}
-              onChange={handlePaymentMethodChange}
-              disabled={submittingOrder}
-            >
+            <label className="app-label" htmlFor="payment-method">
+              Forma de pagamento
+            </label>
+            <select id="payment-method" className="app-input" value={paymentMethod} onChange={handlePaymentMethodChange} disabled={submittingOrder}>
               {availablePaymentMethods.map((method) => (
-                <option key={method.value} value={method.value}>{method.label}</option>
+                <option key={method.value} value={method.value}>
+                  {method.label}
+                </option>
               ))}
             </select>
+
             {!pixOnlineAvailable ? (
               <p className="text-xs font-medium text-slate-500">
-                Pix online aparece aqui quando a empresa tem Mercado Pago conectado e ativo.
+                Pagamento online aparece aqui quando a empresa tem Mercado Pago conectado e ativo.
               </p>
             ) : null}
+
             {paymentMethod === PIX_ONLINE_PAYMENT_METHOD ? (
-              <Alert variant="info" title="Pix online">
-                O pedido será criado como aguardando pagamento. Após o Pix ser aprovado, ele será liberado para o estabelecimento.
+              <Alert variant="info" title="Pagamento online">
+                O pedido será criado como aguardando pagamento. Você será redirecionado para finalizar no Mercado Pago. Após a aprovação, ele será liberado para o estabelecimento.
               </Alert>
             ) : null}
           </div>
 
           <div className="space-y-2">
-            <label className="app-label" htmlFor="order-notes">Observações</label>
+            <label className="app-label" htmlFor="order-notes">
+              Observações
+            </label>
             <textarea
               id="order-notes"
               className="app-input min-h-24 resize-y"
@@ -588,7 +689,8 @@ export default function CustomerRestaurant() {
               <p className="font-bold text-slate-900">Endereço de entrega</p>
               {locationStatus?.default_address ? (
                 <p className="mt-1">
-                  {locationStatus.default_address.street}, {locationStatus.default_address.number} · {locationStatus.default_address.city}/{locationStatus.default_address.state}
+                  {locationStatus.default_address.street}, {locationStatus.default_address.number} · {locationStatus.default_address.city}/
+                  {locationStatus.default_address.state}
                 </p>
               ) : (
                 <p className="mt-1 text-red-600">Configure um endereço padrão para delivery.</p>
@@ -607,23 +709,39 @@ export default function CustomerRestaurant() {
 
           {calculation ? (
             <div className="space-y-2 rounded-2xl border border-slate-200 p-4">
-              <div className="flex justify-between text-sm"><span>Subtotal</span><strong>{formatCurrency(calculation.subtotal)}</strong></div>
+              <div className="flex justify-between text-sm">
+                <span>Subtotal</span>
+                <strong>{formatCurrency(calculation.subtotal)}</strong>
+              </div>
+
               {Number(calculation.discount_amount ?? 0) > 0 ? (
                 <div className="flex justify-between text-sm text-emerald-700">
                   <span>Desconto retirada ({calculation.pickup_discount_percent}%)</span>
                   <strong>-{formatCurrency(calculation.discount_amount)}</strong>
                 </div>
               ) : null}
+
               {calculation.fulfillment_type === FULFILLMENT_DELIVERY ? (
                 <>
-                  <div className="flex justify-between text-sm"><span>Distância</span><strong>{calculation.distance_km} km</strong></div>
-                  <div className="flex justify-between text-sm"><span>Entrega</span><strong>{formatCurrency(calculation.delivery_fee)}</strong></div>
+                  <div className="flex justify-between text-sm">
+                    <span>Distância</span>
+                    <strong>{calculation.distance_km} km</strong>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Entrega</span>
+                    <strong>{formatCurrency(calculation.delivery_fee)}</strong>
+                  </div>
                 </>
               ) : (
-                <div className="flex justify-between text-sm"><span>Entrega</span><strong>{formatCurrency(0)}</strong></div>
+                <div className="flex justify-between text-sm">
+                  <span>Entrega</span>
+                  <strong>{formatCurrency(0)}</strong>
+                </div>
               )}
+
               <div className="flex justify-between border-t border-slate-100 pt-2 text-base font-black text-slate-950">
-                <span>Total</span><span>{formatCurrency(calculation.total)}</span>
+                <span>Total</span>
+                <span>{formatCurrency(calculation.total)}</span>
               </div>
             </div>
           ) : (
