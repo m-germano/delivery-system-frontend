@@ -31,6 +31,14 @@ export const companyService = {
     return data;
   },
 
+  async updateOpenStatus(isOpen) {
+    const { data } = await api.patch('/companies/me/open-status', {
+      is_open: isOpen,
+    });
+
+    return data;
+  },
+
   async getMyOrderSettings() {
     const { data } = await api.get('/companies/me/order-settings');
     return data;
