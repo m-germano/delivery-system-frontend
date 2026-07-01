@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, MapPin, RefreshCw, Save } from 'lucide-react';
+import { CheckCircle2, MapPin, Power, RefreshCw, Save, Store } from 'lucide-react';
 import Alert from '../../components/ui/Alert.jsx';
 import Button from '../../components/ui/Button.jsx';
 import InputField from '../../components/ui/InputField.jsx';
@@ -120,6 +120,7 @@ export default function CompanySettings() {
 
       return next;
     });
+
     setError(null);
     setSuccess(null);
   }
@@ -154,6 +155,7 @@ export default function CompanySettings() {
 
       try {
         const currentCompany = await companyService.getMine();
+
         if (!isMounted) return;
 
         setCompany(currentCompany);
@@ -161,7 +163,9 @@ export default function CompanySettings() {
         setMode('edit');
 
         const settings = await companyService.getMyOrderSettings().catch(() => null);
+
         if (!isMounted) return;
+
         if (settings) {
           setOrderSettingsForm({
             accepts_delivery: Boolean(settings.accepts_delivery),
@@ -215,10 +219,30 @@ export default function CompanySettings() {
         number: form.number.trim(),
         complement: toNullableString(form.complement),
       });
+
       mergeAddress(resolvedAddress);
       setSuccess('Endereço preenchido automaticamente.');
     } catch (requestError) {
       setError(getApiErrorMessage(requestError, 'Não foi possível preencher o endereço automaticamente.'));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleToggleOpenStatus() {
+    if (!company) return;
+
+    setActionLoading('open-status');
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const updatedCompany = await companyService.updateOpenStatus(!Boolean(company.is_open));
+
+      setCompany(updatedCompany);
+      setSuccess(updatedCompany.is_open ? 'Loja aberta para receber pedidos.' : 'Loja fechada para novos pedidos.');
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError, 'Não foi possível alterar o funcionamento da loja.'));
     } finally {
       setActionLoading(null);
     }
@@ -280,6 +304,7 @@ export default function CompanySettings() {
     }
 
     const orderSettingsPayload = buildOrderSettingsPayload();
+
     if (!orderSettingsPayload.accepts_delivery && !orderSettingsPayload.accepts_pickup) {
       setError('Ative delivery, retirada ou ambos.');
       return;
@@ -334,7 +359,6 @@ export default function CompanySettings() {
   return (
     <form className="space-y-6" onSubmit={handleSubmit}>
       <PageHeader
-
         title="Configurações da empresa"
         description="Cadastre os dados comerciais e informe CEP e número para localizar a empresa automaticamente."
         actions={
@@ -363,6 +387,56 @@ export default function CompanySettings() {
         </Alert>
       ) : null}
 
+      {mode === 'edit' && company ? (
+        <Section
+          title="Funcionamento da loja"
+          description="Controle manualmente se a loja está aberta ou fechada para receber novos pedidos."
+        >
+          <div className="flex flex-col gap-4 rounded-2xl border border-ink-200 bg-white p-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-start gap-3">
+              <div
+                className={
+                  company.is_open
+                    ? 'flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700'
+                    : 'flex h-11 w-11 items-center justify-center rounded-2xl bg-red-100 text-red-700'
+                }
+              >
+                <Store className="h-5 w-5" />
+              </div>
+
+              <div>
+                <p className="text-sm font-black text-ink-900">{company.is_open ? 'Loja aberta' : 'Loja fechada'}</p>
+                <p className="mt-1 text-sm leading-6 text-ink-500">
+                  {company.is_open
+                    ? 'Clientes podem criar pedidos normalmente.'
+                    : 'Clientes conseguem visualizar a loja, mas não conseguem finalizar novos pedidos.'}
+                </p>
+
+                <span
+                  className={
+                    company.is_open
+                      ? 'mt-3 inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700'
+                      : 'mt-3 inline-flex rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700'
+                  }
+                >
+                  {company.is_open ? 'Aberta para pedidos' : 'Fechada para pedidos'}
+                </span>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              variant={company.is_open ? 'secondary' : undefined}
+              onClick={handleToggleOpenStatus}
+              disabled={saving || Boolean(actionLoading)}
+            >
+              {actionLoading === 'open-status' ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Power className="h-4 w-4" />}
+              {company.is_open ? 'Fechar loja' : 'Abrir loja'}
+            </Button>
+          </div>
+        </Section>
+      ) : null}
+
       <Section title="Dados comerciais" description="Essas informações identificam a empresa para os clientes.">
         <div className="grid gap-4 md:grid-cols-2">
           <InputField
@@ -373,6 +447,7 @@ export default function CompanySettings() {
             onChange={(event) => updateField('name', event.target.value)}
             required
           />
+
           <InputField
             id="company-phone"
             label="Telefone"
@@ -380,6 +455,7 @@ export default function CompanySettings() {
             value={form.phone}
             onChange={(event) => updateField('phone', event.target.value)}
           />
+
           <InputField
             id="company-document"
             label="Documento"
@@ -387,6 +463,7 @@ export default function CompanySettings() {
             value={form.document}
             onChange={(event) => updateField('document', event.target.value)}
           />
+
           <InputField
             id="company-image"
             label="URL da imagem"
@@ -395,6 +472,7 @@ export default function CompanySettings() {
             onChange={(event) => updateField('image_url', event.target.value)}
           />
         </div>
+
         <div className="mt-4 space-y-2">
           <label className="app-label" htmlFor="company-description">
             Descrição
@@ -419,6 +497,7 @@ export default function CompanySettings() {
             onChange={(event) => updateField('zip_code', event.target.value)}
             required
           />
+
           <InputField
             id="company-number"
             label="Número"
@@ -427,6 +506,7 @@ export default function CompanySettings() {
             onChange={(event) => updateField('number', event.target.value)}
             required
           />
+
           <InputField
             id="company-complement"
             label="Complemento"
@@ -434,6 +514,7 @@ export default function CompanySettings() {
             value={form.complement}
             onChange={(event) => updateField('complement', event.target.value)}
           />
+
           <Button type="button" variant="secondary" onClick={handleResolveAddress} disabled={Boolean(actionLoading) || saving}>
             {actionLoading === 'resolve' ? <RefreshCw className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
             Preencher endereço automaticamente
@@ -495,6 +576,7 @@ export default function CompanySettings() {
             value={orderSettingsForm.pickup_discount_percent}
             onChange={(event) => updateOrderSettingsField('pickup_discount_percent', event.target.value)}
           />
+
           <InputField
             id="minimum-order-value"
             label="Pedido mínimo (R$)"
